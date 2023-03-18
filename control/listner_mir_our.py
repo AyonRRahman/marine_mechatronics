@@ -34,6 +34,13 @@ dt = 0.001 # ask V
 int_error = 0
 
 #### control modes
+global kp
+global ki
+global kd
+kp = 5
+kd = 5
+ki = 5
+
 global control_depth
 global depth_control_mode
 global floatability
@@ -290,13 +297,16 @@ def OdoCallback(data):
     vel.angular.y = q
     vel.angular.z = r
     pub_angular_velocity.publish(vel)
+    global kp 
+    global ki 
+    global kd
 
     if yaw_control_mode==1:
-        r = P_control(kp=5, state=5, destination =control_yaw[counter])
+        r = P_control(kp=kp, state=angle_yaw, destination =control_yaw[counter])
         vel.angular.z = r       #p control for yaw
 
     elif yaw_control_mode==2:
-        r = PI_control(kp=5,ki=5, state=5, destination =control_yaw[counter])       #p control for yaw
+        r = PI_control(kp=kp,ki=ki, state=angle_yaw, destination =control_yaw[counter])       #p control for yaw
         vel.angular.z = r
 
     
@@ -360,12 +370,16 @@ def PressureCallback(data):
     global control_depth
     global depth_control_mode
     global counter
+    global kp
+    global ki
+    global kd
+
     if depth_control_mode==1:
-        z = P_control(kp=5, state=depth_wrt_startup, destination =control_depth[counter], floatability=floatability)       #p control for yaw
+        z = P_control(kp=kp, state=depth_wrt_startup, destination =control_depth[counter], floatability=floatability)       #p control for yaw
     elif depth_control_mode==2:
-        z = PI_control(kp=5,ki=5, state=depth_wrt_startup, destination =control_depth[counter], floatability=floatability)       #p control for yaw
+        z = PI_control(kp=kp,ki=ki, state=depth_wrt_startup, destination =control_depth[counter], floatability=floatability)       #p control for yaw
     elif depth_control_mode==3:
-        z = PID_control(kp=5, ki=5, kd=5, state=depth_wrt_startup, destination=control_depth[counter], floatability=floatability)
+        z = PID_control(kp=kp, ki=ki, kd=kd, state=depth_wrt_startup, destination=control_depth[counter], floatability=floatability)
 
     if depth_control_mode!=0:
         vel = Twist()
@@ -383,7 +397,7 @@ def PressureCallback(data):
     Correction_depth = int(Correction_depth)
     setOverrideRCIN(1500, 1500, Correction_depth, 1500, 1500, 1500)
 
-def mapValueScalSat(value):
+def mapValueScalSat(value):  # ask V 
 	# Correction_Vel and joy between -1 et 1
 	# scaling for publishing with setOverrideRCIN values between 1100 and 1900
 	# neutral point is 1500

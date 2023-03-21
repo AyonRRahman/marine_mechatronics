@@ -269,9 +269,10 @@ def OdoCallback(data):
 
     global pose_bag
     global control_bag
+    global vel_bag
 
     orientation = data.orientation
-    angular_velocity = data.angular_velocity
+    angular_velocity = data.angular_velocity # ask V about linear acc
 
     # extraction of yaw angle
     q = [orientation.x, orientation.y, orientation.z, orientation.w]
@@ -308,6 +309,8 @@ def OdoCallback(data):
     vel.angular.x = p
     vel.angular.y = q
     vel.angular.z = r
+
+    vel_bag.write(topic='angular_vel', msg='vel')
     pub_angular_velocity.publish(vel)
     global kp 
     global ki 
@@ -459,10 +462,12 @@ def setOverrideRCIN(channel_pitch, channel_roll, channel_throttle, channel_yaw, 
 def subscriber():
     global control_bag
     global pose_bag
+    global vel_bag
     global counter
     
     control_bag = rosbag.Bag('controls.bag', 'w')
     pose_bag = rosbag.Bag('poses.bag', 'w')
+    vel_bag = rosbag.Bag('Velocities.bag', 'w')
 
     rospy.Subscriber("joy", Joy, joyCallback)
     rospy.Subscriber("cmd_vel", Twist, velCallback)
@@ -478,6 +483,7 @@ def subscriber():
         print('program stopped manually')
         control_bag.close()
         pose_bag.close()
+        vel_bag.close()
 
 
 if __name__ == '__main__':

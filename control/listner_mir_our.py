@@ -25,15 +25,18 @@ from geometry_msgs.msg import Twist
 import time
 import sys
 import argparse
+import rosbag
+
 
 # ---------- Global Variables ---------------
 #global variables for control
 global int_error #for integral 
 global dt 
 dt = 0.001 # ask V
-int_error = 0
+int_error = 0 #initialize error
 
 #### control modes
+## control params
 global kp
 global ki
 global kd
@@ -41,10 +44,12 @@ kp = 5
 kd = 5
 ki = 5
 
+#### control mode
 global control_depth
 global depth_control_mode
 global floatability
 floatability = 0
+
 #for depth
 control_depth = 0 # the depth at which we want to control
 depth_control_mode = 0 #0 for not controlling depth, 1 for P, 2 for PI, 3 for PID
@@ -52,8 +57,10 @@ depth_control_mode = 0 #0 for not controlling depth, 1 for P, 2 for PI, 3 for PI
 #for yaw
 global control_yaw
 global yaw_control_mode
-global counter
+
+global counter # for trajectory
 counter = 0
+
 control_yaw = 0 #the yaw at which we want to control
 yaw_control_mode = 0 #0 for not controlling depth, 1 for P, 2 for PI, 3 for PID
 
@@ -85,6 +92,7 @@ def trajectory_gen(t_final=20, mission_time=30, state_init = [0,0,0,0,0,0], stat
     return np.concatenate((traj, state_steady), axis =1), np.concatenate((der, steady_state_der), axis =1) 
 
 traj, _ = trajectory_gen(t_final=20, mission_time=30, state_init=[0,0,depth_p0,0,0,angle_yaw_a0], state_final=[0,0,control_depth, 0,0,control_yaw])
+
 if yaw_control_mode!=0:
 	control_yaw = traj[5,:]
 elif depth_control_mode!=0:
@@ -367,6 +375,8 @@ def PressureCallback(data):
 
     # setup depth servo control here
     # ...
+
+    #params for control
     global control_depth
     global depth_control_mode
     global counter

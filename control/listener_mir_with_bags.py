@@ -32,6 +32,7 @@ import rosbag
 #global variables for control
 global int_error #for integral 
 global dt 
+global prev_error
 dt = 0.001 # ask V
 int_error = 0 #initialize error
 

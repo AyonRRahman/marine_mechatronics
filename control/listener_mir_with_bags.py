@@ -34,6 +34,7 @@ global int_error #for integral
 global dt 
 global prev_error
 dt = 0.001 # ask V
+prev_error = 0 # init 
 int_error = 0 #initialize error
 
 #### control modes

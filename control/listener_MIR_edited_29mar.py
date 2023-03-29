@@ -98,7 +98,7 @@ Vmax_mot = 1900
 Vmin_mot = 1100
 
 
-
+rospy.loginfo(f"kp={kp} ki={ki}, kd={kd}, yaw_control_mode={yaw_control_mode}, depth_control_mode={depth_control_mode}")
 
 ### trajectory
 def get_mapping(x, battery = 16):

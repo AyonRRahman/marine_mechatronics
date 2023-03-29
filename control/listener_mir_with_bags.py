@@ -42,9 +42,9 @@ int_error = 0 #initialize error
 global kp
 global ki
 global kd
-kp = 5
-kd = 5
-ki = 5
+kp = 1
+kd = 1
+ki = 1
 
 #### control mode
 global control_depth
@@ -63,8 +63,35 @@ global yaw_control_mode
 global counter # for trajectory
 counter = 0
 
-control_yaw = 0 #the yaw at which we want to control
-yaw_control_mode = 0 #0 for not controlling depth, 1 for P, 2 for PI, 3 for PID
+control_yaw = 1.2 #the yaw at which we want to control
+yaw_control_mode = 1 #0 for not controlling depth, 1 for P, 2 for PI, 3 for PID
+
+set_mode = [0]*3
+set_mode[0] = True   # Mode manual
+set_mode[1] = False  # Mode automatic without correction
+set_mode[2] = False  # Mode with correction
+
+#Conditions
+init_a0 = True
+init_p0 = True
+arming = False
+
+angle_wrt_startup = [0]*3
+angle_roll_a0 = 0.0
+angle_pitch_a0 = 0.0
+angle_yaw_a0 = 0.0
+depth_wrt_startup = 0
+depth_p0 = 0
+
+enable_depth = False 
+enable_ping = True 
+pinger_confidence = 0
+pinger_distance = 0
+
+Vmax_mot = 1900
+Vmin_mot = 1100
+
+
 
 ### trajectory
 def trajectory( t ,state_init=[5,5,5,5,5,5], state_final=[5,5,5,5,5,5], t_final=20, enable=[1,1,1,1,1,1]):
@@ -101,30 +128,6 @@ elif depth_control_mode!=0:
 	control_depth= traj[2,:]
 
 
-set_mode = [0]*3
-set_mode[0] = True   # Mode manual
-set_mode[1] = False  # Mode automatic without correction
-set_mode[2] = False  # Mode with correction
-
-#Conditions
-init_a0 = True
-init_p0 = True
-arming = False
-
-angle_wrt_startup = [0]*3
-angle_roll_a0 = 0.0
-angle_pitch_a0 = 0.0
-angle_yaw_a0 = 0.0
-depth_wrt_startup = 0
-depth_p0 = 0
-
-enable_depth = False 
-enable_ping = True 
-pinger_confidence = 0
-pinger_distance = 0
-
-Vmax_mot = 1900
-Vmin_mot = 1100
 
 # Linear/angular velocity 
 u = 0               # linear surge velocity 

@@ -11,7 +11,7 @@ b = 0.1
 t = np.linspace(0,10,10000)
 xk_1 = []
 vk_1 = []
-xm_0 = 10*np.sin(t)
+xm_0 = -10*np.sin(t)
 
 for xm in xm_0:
     # xm = random.random()*100

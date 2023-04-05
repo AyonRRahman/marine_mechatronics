@@ -223,96 +223,81 @@ class AlphaBetaFilter:
         
         return self.vk_0
 
-def PID_control(kp=kp, ki=ki, kd=kd, state=[5,5,5], destination=[5,5,5], floatability=floatability):
+def PID_control(kp=kp, ki=ki, kd=kd, state=[5,5,5], destination=[3,3,3], floatability=floatability):
     global int_error
     global dt
-    global prev_error
     global counter
-    global vk
-    global xk
-    global xk_0
-    global vk_0
     global der_traj
-    
+    global alpha_beta_filter
+    global enable
+    global imu_data
     #calculating the error in states
-    error = np.array(destination)- np.array(state)
-
-    a = 0.1
-    b = 0.005
+    error = np.subtract(np.array(destination), np.array(state))
+    P = np.multiply(kp, error)
+    # print(error)
+    int_error+=np.multiply(error, dt)
+    I = np.multiply(ki,int_error)
+    # print(int_error)
     
-
+    destination_der = [der_traj[0][counter], der_traj[1][counter], der_traj[2][counter]]
     
-    
-    
-    xk = xk_0 + vk_0*dt
-    vk = vk_0
-
-    rk = error - xk
-    xk +=a*rk
-    vk += (b*rk)/dt
-
-    xk_0 = xk
-    vk_0 = vk 
+    der_depth = alpha_beta_filter.filter_step(state[2])
+    state_der = [imu_data['pitch_rate'], imu_data['yaw_rate'], der_depth]
+    # print(state_der)
+    der_error = np.subtract(destination_der, state_der)
+    # print(der_error)
+    D = np.multiply(kd, der_error)
 
 
+    return P+I+D +[0,0,floatability] 
 
-
-    p_control = kp*error
-    int_error += error*dt
-    pi_control = p_control + int_error*ki
-
-    diff_error = vk
-    output = pi_control + kd*diff_error + floatability
-    prev_error = error
-    print(f'{destination} error {error} der{diff_error}')
-
-    return output
 
 def joyCallback(data):
-	global arming
-	global set_mode
-	global init_a0
-	global init_p0
-	global Sum_Errors_Vel
-	global Sum_Errors_angle_yaw
-	global Sum_Errors_depth
+    global arming
+    global set_mode
+    global init_a0
+    global init_p0
+    global Sum_Errors_Vel
+    global Sum_Errors_angle_yaw
+    global Sum_Errors_depth
 
-	# Joystick buttons
-	btn_arm = data.buttons[7]  # Start button
-	btn_disarm = data.buttons[6]  # Back button
-	btn_manual_mode = data.buttons[3]  # Y button
-	btn_automatic_mode = data.buttons[2]  # X button
-	btn_corrected_mode = data.buttons[0]  # A button
+    # Joystick buttons
+    btn_arm = data.buttons[7]  # Start button
+    btn_disarm = data.buttons[6]  # Back button
+    btn_manual_mode = data.buttons[3]  # Y button
+    btn_automatic_mode = data.buttons[2]  # X button
+    btn_corrected_mode = data.buttons[0]  # A button
 
-	# Disarming when Back button is pressed
-	if (btn_disarm == 1 and arming == True):
-		arming = False
-		armDisarm(arming)
+    # Disarming when Back button is pressed
+    if (btn_disarm == 1 and arming == True):
+        arming = False
+        armDisarm(arming)
 
-	# Arming when Start button is pressed
-	if (btn_arm == 1 and arming == False):
-		arming = True
-		armDisarm(arming)
+    # Arming when Start button is pressed
+    if (btn_arm == 1 and arming == False):
+        arming = True
+        armDisarm(arming)
 
-	# Switch manual, auto and correction mode
-	if (btn_manual_mode and not set_mode[0]):
-		set_mode[0] = True
-		set_mode[1] = False
-		set_mode[2] = False		
-		rospy.loginfo("Mode manual")
-	if (btn_automatic_mode and not set_mode[1]):
-		set_mode[0] = False
-		set_mode[1] = True
-		set_mode[2] = False		
-		rospy.loginfo("Mode automatic")
-	if (btn_corrected_mode and not set_mode[2]):
-		init_a0 = True
-		init_p0 = True
-		# set sum errors to 0 here, ex: Sum_Errors_Vel = [0]*3
-		set_mode[0] = False
-		set_mode[1] = False
-		set_mode[2] = True
-		rospy.loginfo("Mode correction")
+    # Switch manual, auto and correction mode
+    if (btn_manual_mode and not set_mode[0]):
+        set_mode[0] = True
+        set_mode[1] = False
+        set_mode[2] = False		
+        rospy.loginfo("Mode manual")
+    if (btn_automatic_mode and not set_mode[1]):
+        set_mode[0] = False
+        set_mode[1] = True
+        set_mode[2] = False		
+        rospy.loginfo("Mode automatic")
+    if (btn_corrected_mode and not set_mode[2]):
+        init_a0 = True
+        init_p0 = True
+        
+        set_mode[0] = False
+        set_mode[1] = False
+        set_mode[2] = True
+        rospy.loginfo("Mode correction")
+        generate_trajectories()
 
 def armDisarm(armed):
 	# This functions sends a long command service with 400 code to arm or disarm motors
@@ -367,18 +352,9 @@ def OdoCallback(data):
     global p
     global q
     global r
-    global yaw_control_mode
-    global control_yaw
-    global counter
-
-    global yaw_control_mode
-    ##### bags
-    global pose_bag
-    global control_bag
-    global imu_bag
     global arming
     global set_mode
-
+    global imu_data #to store angles and their rate
 
     orientation = data.orientation
     angular_velocity = data.angular_velocity
@@ -389,8 +365,7 @@ def OdoCallback(data):
     angle_roll = euler[0]
     angle_pitch = euler[1]
     angle_yaw = euler[2]
-
-    # imu_bag.write(topic='mavros/imu/data', msg=data) #check data 
+    
     
 
     if (init_a0):
@@ -416,46 +391,21 @@ def OdoCallback(data):
     q = angular_velocity.y
     r = angular_velocity.z
     
-    vel = Twist()
-    vel.angular.x = p
-    vel.angular.y = q
-    vel.angular.z = r
-    pub_angular_velocity.publish(vel)
-    global kp 
-    global ki 
-    global kd
-
-    if yaw_control_mode==1 and set_mode[2] and arming:
-        r = P_control(kp=kp, state=angle_yaw, destination =control_yaw[counter])
-        vel.angular.z = r       #p control for yaw
-        counter+=1
-
-    elif yaw_control_mode==2 and set_mode[2] and arming:
-        r = PI_control(kp=kp,ki=ki, state=angle_yaw, destination =control_yaw[counter])       #p control for yaw
-        vel.angular.z = r
-        counter+=1
-
+    imu_data = {
+        'roll':angle_roll,
+        'pitch':angle_pitch,
+        'yaw':angle_yaw,
+        'roll_rate':p,
+        'pitch_rate':q,
+        'yaw_rate':r
+    }
     
-
-    if yaw_control_mode!=0:
-        pub_cmd_vel.publish(vel)              #control for yaw
-
+    
     # Only continue if manual_mode is disabled
     if (set_mode[0]):
         return
 
-    # Send PWM commands to motors
-    # yaw command to be adapted using sensor feedback	
-    Correction_yaw = 1500
     
-    if yaw_control_mode!=0:
-        Correction_yaw = int(get_mapping(r)) 
-    
-    # setOverrideRCIN(1500, 1500, 1500, Correction_yaw, 1500, 1500)
-    control_cmd = Twist()
-    control_cmd.angular.z = Correction_yaw
-    # control_bag.write(topic='control_yaw_'+str(yaw_control_mode)+'_'+str(kp)+'_'+str(ki)+'_'+str(kd), msg = control_cmd )
-
 def DvlCallback(data):
 	global set_mode
 	global u
@@ -476,12 +426,7 @@ def PressureCallback(data):
     global depth_p0
     global depth_wrt_startup
     global init_p0
-    ##### bags
-    global pose_bag
-    global control_bag
-    global imu_bag
-    global depth_control_mode
-
+    
 
     rho = 1000.0 # 1025.0 for sea water
     g = 9.80665
@@ -496,13 +441,12 @@ def PressureCallback(data):
         return
 
     pressure = data.fluid_pressure
-    press = Twist()
-    press.linear.z = pressure
-    # pose_bag.write(topic="mavros/imu/water_pressure", msg = press)
-
+    
     if (init_p0):
         # 1st execution, init
         depth_p0 = (pressure - 101300)/(rho*g)
+        global alpha_beta_filter
+        alpha_beta_filter = AlphaBetaFilter(initial_depth=depth_p0) #filtering
         init_p0 = False
 
     depth_wrt_startup = (pressure - 101300)/(rho*g) - depth_p0
@@ -511,43 +455,38 @@ def PressureCallback(data):
     # ...
 
     #params for control
-    global control_depth
-    global depth_control_mode
-    global counter
+    global control_state #the state we want our system to go
+    global control_mode # the mode at which we want to control
+    global floatability
     global kp
     global ki
     global kd
+    global counter
+    global imu_data
+    global traj
 
-    if depth_control_mode==1 and set_mode[2] and arming:
-        z = P_control(kp=kp, state=depth_wrt_startup, destination =control_depth[counter], floatability=floatability)  
-        counter+=1     #p control for yaw
-    elif depth_control_mode==2 and set_mode[2] and arming:
-        z = PI_control(kp=kp,ki=ki, state=depth_wrt_startup, destination =control_depth[counter], floatability=floatability)       #p control for yaw
+    current_state = [imu_data['pitch'], imu_data['yaw'], depth_wrt_startup]
+
+    if sum(control_mode)>0 and set_mode[2] and arming:
+        controller_signal = PID_control(
+                        kp=kp,ki=ki,kd=kd,
+                        state=current_state,
+                        destination =[traj[0][counter],traj[1][counter] ,traj[2][counter]], 
+                        floatability=floatability
+                        )  
         counter+=1     #p control for yaw
     
-    elif depth_control_mode==3 and set_mode[2] and arming:
-        z = PID_control(kp=kp, ki=ki, kd=kd, state=depth_wrt_startup, destination=control_depth[counter], floatability=floatability)
-        counter+=1     #p control for yaw
-
-    # if depth_control_mode!=0:
-    #     vel = Twist()
-    #     x=0                        #ask V
-    #     y=0
-    #     vel.linear.x = x
-    #     vel.linear.y = y
-    #     vel.linear.z = z
-    #     pub_cmd_vel.publish(vel)
-
+    Correction_depth = 1500	    
+    Correction_pitch = 1500
+    Correction_yaw = 1500
 
     # Send PWM commands to motors
-
-    # update Correction_depth
-    Correction_depth = 1500	          #ask V
-    # Send PWM commands to motors
-    if depth_control_mode!=0:
-        Correction_depth = int(get_mapping(z)) 
+    if sum(control_mode)>0:
+        Correction_pitch = int(get_mapping(controller_signal[0]))
+        Correction_yaw = int(get_mapping(controller_signal[1]))
+        Correction_depth = int(get_mapping(controller_signal[2]))
     
-    setOverrideRCIN(1500, 1500, Correction_depth, 1500, 1500, 1500)
+    setOverrideRCIN(Correction_pitch, 1500, Correction_depth, Correction_yaw, 1500, 1500)
     control_cmd = Twist()
     control_cmd.linear.z = Correction_depth
     # control_bag.write(topic='control_depth_'+str(depth_control_mode)+'_'+str(kp)+'_'+str(ki)+'_'+str(kd), msg = control_cmd )

@@ -6,7 +6,7 @@ import pandas as pd
 
 pd.set_option('display.max_columns', None)
 df = pd.read_csv('_slash_br5_slash_mavros_slash_imu_slash_water_pressure.csv')
-print(df.head())
+
 def my_operation(x):
     return (x - 101300)/(1000*9.80665)
 
@@ -31,36 +31,39 @@ from transforms3d.euler import quat2euler
 
 
 # z = df['roll'].to_list()[3700:]
+class AlphaBetaFilter:
+    def __init__(self,initial_depth,a=0.1,b=0.005,dt=1/58):
+        self.a = a
+        self.b = b
+        self.dt = dt
+        self.vk=0
+        self.xk=0
+        self.xk_0=initial_depth
+        self.vk_0=0
 
-dt = 1/58
+    def filter_step(self, xm):
+        self.xk = self.xk_0 + self.vk_0*self.dt
+        self.vk = self.vk_0
 
-xk_0=z[0]
-vk_0 = 0
-a = 0.2
-b = 0.01
-# t = np.linspace(0,10,10000)
-xk_1 = []
-vk_1 = []
-xm_0 = z
+        self.rk = xm - self.xk
+        self.xk +=self.a*self.rk
+        self.vk += (self.b*self.rk)/self.dt
 
-for xm in xm_0:
-    # xm = random.random()*100
-    # xm_0.append(xm)
-    xk = xk_0 + vk_0*dt
-    vk = vk_0
+        self.xk_0 = self.xk
+        self.vk_0 = self.vk 
+        
+        return self.vk_0
 
-    rk = xm - xk
-    xk +=a*rk
-    vk += (b*rk)/dt
+alphabeta = AlphaBetaFilter(initial_depth=z[0])
 
-    xk_0 = xk
-    vk_0 = vk 
 
-    xk_1.append(xk_0)
-    vk_1.append(vk_0)
+vks=[]
+for depth in z[1:]:
+    vks.append(alphabeta.filter_step(depth))
 
-plt.plot( z, label='yaw')
-plt.plot( np.array(vk_1), label ='yaw rate predicted by the filter')
+
+plt.plot( z, label='depth')
+plt.plot( np.array(vks), label ='depth rate predicted by the filter')
 plt.grid()
 # plt.plot(df['z.1'].to_list()[3700:],label = 'actual vel')
 # plt.plot( xm_0,label='xm_0')

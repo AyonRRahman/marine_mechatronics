@@ -48,22 +48,31 @@ kd = [1,1,0.01]         # pitch yaw depth
 ki = [1,1,0.9]          # pitch yaw depth
 
 #### control mode
-global control_state
-global control_mode
+global control_state #the state we want our system to go
+global control_mode # the mode at which we want to control
 global floatability
 
 floatability = 20/4
-
+###ideally the pitch should always be 0
 control_state = [0,0,0.5]   # pitch yaw depth
 control_mode = [3,3,3]      #0 for not controlling, 1 for P, 2 for PI, 3 for PID
+
 #only use PID. the P or PI is not implemented. To use P and PI just make the
-#the control gains=0
+#the control gains kp/ki=0
 
 rospy.loginfo(f"we are in control mode and the control variables are \nkp={kp} ki={ki}, kd={kd}, control_mode={control_mode}")
 
 #---------trajectory generation-------
 #check the dt
 def trajectory_gen( t_final=20, mission_time=30, state_init = 0, state_final=1, dt=1/60): 
+    '''
+    t_final: the time at which we want our robot to reach final state
+    mission_time: the time upto which the robot should work
+    state_init : initial state of the robot
+    state_final: final state after control
+    dt: depends on the sensor reading
+
+    '''
     t = np.linspace(0, t_final, int(t_final/dt))
     t_steady = np.linspace(t_final, mission_time, int((mission_time-t_final)/dt))
     
@@ -85,11 +94,29 @@ def trajectory_gen( t_final=20, mission_time=30, state_init = 0, state_final=1, 
     return np.concatenate((traj, state_steady), axis =0), np.concatenate((derivative_traj, steady_state_der), axis =0) 
 
 
+def generate_trajectories():
+    global depth_p0
+    global angle_pitch_a0
+    global angle_yaw_a0
 
-traj, _ = trajectory_gen(t_final=5, mission_time=100000, state_init=depth_p0, state_final=control_depth_1)
-print(len(traj))
+    global control_state
+    t_final = 20
+    mission_time = 60
+    traj_pitch,der_pitch = trajectory_gen(t_final=t_final, mission_time=mission_time, state_init=angle_pitch_a0, state_final=control_state[0])  
+    traj_yaw, der_yaw = trajectory_gen(t_final=t_final, mission_time=mission_time, state_init=angle_yaw_a0, state_final=control_state[1])
+    traj_depth, der_depth = trajectory_gen(t_final=t_final, mission_time=mission_time, state_init=depth_p0, state_final=control_state[2])
+    
+    global traj
+    global der_traj
+    traj = [traj_pitch, traj_yaw, traj_depth]
+    der_traj = [der_pitch, der_yaw, der_depth]
 
+    rospy.loginfo(f"Trajectory generated successfully")
+    rospy.loginfo(f"initial_states:{angle_pitch_a0, angle_yaw_a0, depth_p0}")
+    rospy.loginfo(f"final_states: {control_state}")
+    rospy.loginfo(f"t_final: {t_final}, mission_time:{mission_time}")
 
+    
 
 #---previous global variables that were given---
 global arming
@@ -172,41 +199,31 @@ q = 0               # angular pitch velocity
 r = 0               # angular heave velocity 
 
 # ---------- Functions---------------
+#alpha beta filtering
+class AlphaBetaFilter:
+    def __init__(self,initial_depth,a=0.1,b=0.005,dt=1/58):
+        self.a = a
+        self.b = b
+        self.dt = dt
+        self.vk=0
+        self.xk=0
+        self.xk_0=initial_depth
+        self.vk_0=0
 
-def P_control(kp=5, state=5, destination =5, floatability=floatability):
-    global control_depth_1
-    # destination = control_depth_1
-    # print(destination)
-    output =kp*(destination-state) + floatability     
-    return output 
-	
-def PI_control(kp=5, ki=5, state=5, destination=5, floatability=floatability):
-    global int_error
-    global dt
-    global control_depth_1
-    dt = 1/60
+    def filter_step(self, xm):
+        self.xk = self.xk_0 + self.vk_0*self.dt
+        self.vk = self.vk_0
 
-    # destination = control_depth_1
-    
-    error = destination- state
-    print(f'{destination} error {error}')
-    
-    P_control = kp*error
-    int_error += error*dt
-    output = P_control + int_error*ki + floatability
-    return output
+        self.rk = xm - self.xk
+        self.xk +=self.a*self.rk
+        self.vk += (self.b*self.rk)/self.dt
 
-global vk
-global xk
-global xk_0
-global vk_0
+        self.xk_0 = self.xk
+        self.vk_0 = self.vk 
+        
+        return self.vk_0
 
-vk=0
-xk=0
-xk_0=0
-vk_0=0
-	
-def PID_control(kp=5, ki=5, kd=5, state=5, destination=5, floatability=floatability):
+def PID_control(kp=kp, ki=ki, kd=kd, state=[5,5,5], destination=[5,5,5], floatability=floatability):
     global int_error
     global dt
     global prev_error
@@ -215,25 +232,16 @@ def PID_control(kp=5, ki=5, kd=5, state=5, destination=5, floatability=floatabil
     global xk
     global xk_0
     global vk_0
-    dt = 1/58
+    global der_traj
+    
+    #calculating the error in states
+    error = np.array(destination)- np.array(state)
+
     a = 0.1
     b = 0.005
-    # t = np.linspace(0,10,10000)
-    # xk_1 = []
-    # vk_1 = []
-    # xm_0 = z
-
-    # for xm in xm_0:
-        # xm = random.random()*100
-        # xm_0.append(xm)
-
-    # xk_1.append(xk_0)
-    # vk_1.append(vk_0)
-
     
 
-    error = destination- state
-
+    
     
     
     xk = xk_0 + vk_0*dt
